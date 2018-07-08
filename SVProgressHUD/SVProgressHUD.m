@@ -782,7 +782,6 @@ static const CGFloat SVProgressHUDLabelSpacing = 8.0f;
                 
                 // Set progress animated
                 [CATransaction begin];
-                [CATransaction setDisableActions:YES];
                 strongSelf.ringView.strokeEnd = progress;
                 [CATransaction commit];
                 

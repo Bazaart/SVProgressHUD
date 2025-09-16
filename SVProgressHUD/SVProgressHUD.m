@@ -13,6 +13,7 @@
 #import "SVIndefiniteAnimatedView.h"
 #import "SVProgressAnimatedView.h"
 #import "SVRadialGradientLayer.h"
+#import <objc/runtime.h>
 
 NSString * const SVProgressHUDDidReceiveTouchEventNotification = @"SVProgressHUDDidReceiveTouchEventNotification";
 NSString * const SVProgressHUDDidTouchDownInsideNotification = @"SVProgressHUDDidTouchDownInsideNotification";
@@ -1353,19 +1354,60 @@ static const CGFloat SVProgressHUDLabelSpacing = 8.0f;
 }
     
 - (void)fadeInEffects {
-    if(self.defaultStyle != SVProgressHUDStyleCustom) {
-        // Add blur effect
-        UIBlurEffectStyle blurEffectStyle = self.defaultStyle == SVProgressHUDStyleDark ? UIBlurEffectStyleDark : UIBlurEffectStyleLight;
-        UIBlurEffect *blurEffect = [UIBlurEffect effectWithStyle:blurEffectStyle];
-        self.hudView.effect = blurEffect;
-        
-        // We omit UIVibrancy effect and use a suitable background color as an alternative.
-        // This will make everything more readable. See the following for details:
-        // https://www.omnigroup.com/developer/how-to-make-text-in-a-uivisualeffectview-readable-on-any-background
-        
-        self.hudView.backgroundColor = [self.backgroundColorForStyle colorWithAlphaComponent:0.6f];
+    BOOL usesCustomStyle = self.defaultStyle == SVProgressHUDStyleCustom;
+    UIVisualEffect *visualEffect = nil;
+    CGFloat backgroundAlpha = 0.6f;
+    UIBlurEffectStyle blurEffectStyle = UIBlurEffectStyleLight;
+    if (!usesCustomStyle && self.defaultStyle == SVProgressHUDStyleDark) {
+        blurEffectStyle = UIBlurEffectStyleDark;
+    }
+#if __IPHONE_OS_VERSION_MAX_ALLOWED >= 130000
+    if (@available(iOS 13.0, *)) {
+        NSProcessInfo *processInfo = NSProcessInfo.processInfo;
+        NSOperatingSystemVersion iOS26Version = (NSOperatingSystemVersion){26, 0, 0};
+        if ([processInfo isOperatingSystemAtLeastVersion:iOS26Version]) {
+            // Prefer the dedicated glass material introduced with iOS 26 when available.
+            Class glassEffectClass = NSClassFromString(@"UIGlassEffect");
+            if (glassEffectClass) {
+                id glassEffect = [[glassEffectClass alloc] init];
+                if (glassEffect && [glassEffect isKindOfClass:[UIVisualEffect class]]) {
+                    SEL interactiveSelector = NSSelectorFromString(@"setInteractive:");
+                    if ([glassEffect respondsToSelector:interactiveSelector]) {
+                        IMP imp = [glassEffect methodForSelector:interactiveSelector];
+                        void (*setInteractive)(id, SEL, BOOL) = (void (*)(id, SEL, BOOL))imp;
+                        if (setInteractive != NULL) {
+                            setInteractive(glassEffect, interactiveSelector, YES);
+                        }
+                    }
+                    visualEffect = glassEffect;
+                    if (!usesCustomStyle) {
+                        backgroundAlpha = 0.0f;
+                    }
+                }
+            }
+        }
+        if (!visualEffect && !usesCustomStyle) {
+            if (self.defaultStyle == SVProgressHUDStyleDark) {
+                blurEffectStyle = UIBlurEffectStyleSystemChromeMaterialDark;
+            } else {
+                blurEffectStyle = UIBlurEffectStyleSystemChromeMaterialLight;
+            }
+        }
+    }
+#endif
+    if (!visualEffect && !usesCustomStyle) {
+        visualEffect = [UIBlurEffect effectWithStyle:blurEffectStyle];
+    }
+    self.hudView.effect = visualEffect;
+
+    // We omit UIVibrancy effect and use a suitable background color as an alternative.
+    // This will make everything more readable. See the following for details:
+    // https://www.omnigroup.com/developer/how-to-make-text-in-a-uivisualeffectview-readable-on-any-background
+
+    if (!usesCustomStyle) {
+        self.hudView.backgroundColor = [self.backgroundColorForStyle colorWithAlphaComponent:backgroundAlpha];
     } else {
-        self.hudView.backgroundColor =  self.backgroundColorForStyle;
+        self.hudView.backgroundColor = self.backgroundColorForStyle;
     }
 
     // Fade in views
@@ -1379,10 +1421,8 @@ static const CGFloat SVProgressHUDLabelSpacing = 8.0f;
 
 - (void)fadeOutEffects
 {
-    if(self.defaultStyle != SVProgressHUDStyleCustom) {
-        // Remove blur effect
-        self.hudView.effect = nil;
-    }
+    // Remove blur or glass effect
+    self.hudView.effect = nil;
 
     // Remove background color
     self.hudView.backgroundColor = [UIColor clearColor];

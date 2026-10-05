@@ -637,7 +637,6 @@ static const CGFloat SVProgressHUDLabelSpacing = 8.0f;
 
 #if !defined(SV_APP_EXTENSIONS) && TARGET_OS_IOS
     self.frame = [[[UIApplication sharedApplication] delegate] window].bounds;
-    UIInterfaceOrientation orientation = UIApplication.sharedApplication.statusBarOrientation;
 #elif !defined(SV_APP_EXTENSIONS) && !TARGET_OS_IOS
     self.frame= [UIApplication sharedApplication].keyWindow.bounds;
 #else
@@ -646,12 +645,12 @@ static const CGFloat SVProgressHUDLabelSpacing = 8.0f;
     } else {
         self.frame = UIScreen.mainScreen.bounds;
     }
-#if TARGET_OS_IOS
-    UIInterfaceOrientation orientation = CGRectGetWidth(self.frame) > CGRectGetHeight(self.frame) ? UIInterfaceOrientationLandscapeLeft : UIInterfaceOrientationPortrait;
-#endif
 #endif
     
 #if TARGET_OS_IOS
+    // Only the portrait/landscape distinction is needed for keyboard and motion effects.
+    UIInterfaceOrientation orientation = CGRectGetWidth(self.bounds) > CGRectGetHeight(self.bounds) ? UIInterfaceOrientationLandscapeLeft : UIInterfaceOrientationPortrait;
+
     // Get keyboardHeight in regard to current state
     if(notification) {
         NSDictionary* keyboardInfo = [notification userInfo];
